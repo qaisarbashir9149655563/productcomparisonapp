@@ -1,26 +1,52 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useState, lazy, Suspense } from "react";
+import { Layout, ConfigProvider, theme, Spin } from "antd";
+import { Route, Routes } from "react-router-dom";
+import Sidebar from "./components/sidebar";
+import Navbar from "./components/navbar";
 
-function App() {
+const { Content } = Layout;
+
+const ProductDetailsTable = lazy(() => import("./components/productDetails"));
+const CompareProducts = lazy(() => import("./components/compareProducts"));
+
+const App: React.FC = () => {
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const handleThemeChange = (checked: boolean) => {
+    setIsDarkMode(checked);
+  };
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <ConfigProvider
+      theme={{
+        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+      }}
+    >
+      <Layout style={{ minHeight: "100vh" }}>
+        <Navbar onThemeChange={handleThemeChange} />
+        <Layout>
+          <Sidebar />
+          <Layout style={{ marginLeft: 200, marginTop: 64 }}>
+            <Content
+              style={{
+                padding: 24,
+                margin: 0,
+                minHeight: 280,
+                background: isDarkMode ? "#141414" : "#fff",
+              }}
+            >
+              <Suspense fallback={<Spin size="large" />}>
+                <Routes>
+                  <Route path="/" element={<ProductDetailsTable />} />
+                  <Route path="/compare" element={<CompareProducts />} />
+                </Routes>
+              </Suspense>
+            </Content>
+          </Layout>
+        </Layout>
+      </Layout>
+    </ConfigProvider>
   );
-}
+};
 
 export default App;

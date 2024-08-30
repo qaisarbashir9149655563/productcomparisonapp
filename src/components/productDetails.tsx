@@ -2,8 +2,14 @@ import React, { useEffect, useState } from "react";
 import { Table, Button, notification } from "antd";
 import type { TablePaginationConfig } from "antd/es/table";
 import type { FilterValue, SorterResult } from "antd/es/table/interface";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState, AppDispatch } from "./utils/store";
+import {
+  fetchProducts,
+  addToCompare,
+  removeFromCompare,
+} from "./utils/productSlice";
 
 interface Product {
   id: number;
@@ -22,53 +28,30 @@ interface TableParams {
 }
 
 const ProductDetailsTable: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
+  const { allProducts, compareList, loading } = useSelector(
+    (state: RootState) => state.product
+  );
   const [tableParams, setTableParams] = useState<TableParams>({
     pagination: {
       current: 1,
       pageSize: 10,
     },
   });
-  const [compareList, setCompareList] = useState<number[]>([]);
-  const navigate = useNavigate();
 
-  const handleCompare = (productId: number) => {
-    if (compareList.includes(productId)) {
-      setCompareList(compareList.filter((id) => id !== productId));
-    } else {
-      setCompareList([...compareList, productId]);
-    }
-  };
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const { pagination, sortField, sortOrder } = tableParams;
-      const response = await axios.get("https://dummyjson.com/products", {
-        params: {
-          limit: pagination?.pageSize,
-          skip: ((pagination?.current || 1) - 1) * (pagination?.pageSize || 10),
-          sortBy: sortField,
-          order: sortOrder === "ascend" ? "asc" : "desc",
-        },
-      });
-      setProducts(response.data.products);
-      setTableParams({
-        ...tableParams,
-        pagination: {
-          ...tableParams.pagination,
-          total: response.data.total,
-        },
-      });
-      setLoading(false);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-      setLoading(false);
-    }
+  const fetchProductsData = () => {
+    const { pagination } = tableParams;
+    dispatch(
+      fetchProducts({
+        limit: pagination?.pageSize || 10,
+        skip: ((pagination?.current || 1) - 1) * (pagination?.pageSize || 10),
+      })
+    );
   };
 
   useEffect(() => {
-    fetchProducts();
+    fetchProductsData();
   }, [JSON.stringify(tableParams)]);
 
   const handleTableChange = (
@@ -83,10 +66,18 @@ const ProductDetailsTable: React.FC = () => {
       ...(sorterResult.column
         ? {
             sortField: sorterResult.field?.toString(),
-            sortOrder: sorterResult.order, // This will now work correctly
+            sortOrder: sorterResult.order,
           }
         : {}),
     });
+  };
+
+  const handleCompare = (productId: number) => {
+    if (compareList.includes(productId)) {
+      dispatch(removeFromCompare(productId));
+    } else {
+      dispatch(addToCompare(productId));
+    }
   };
 
   const columns = [
@@ -144,7 +135,7 @@ const ProductDetailsTable: React.FC = () => {
     <div>
       <Table
         columns={columns}
-        dataSource={products}
+        dataSource={allProducts}
         pagination={tableParams.pagination}
         loading={loading}
         onChange={handleTableChange}

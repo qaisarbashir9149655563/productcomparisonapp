@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { Card, Button, Modal, Table, notification } from "antd";
-import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { Card, Button, Modal, Table, notification, Spin } from "antd";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState, AppDispatch } from "./utils/store";
+import {
+  fetchProducts,
+  fetchProductById,
+  removeFromCompare,
+  addToCompare,
+} from "./utils/productSlice";
 
 interface Product {
   id: number;
@@ -13,45 +20,34 @@ interface Product {
 }
 
 const CompareProducts: React.FC = () => {
-  const location = useLocation();
   const navigate = useNavigate();
-  const [products, setProducts] = useState<Product[]>([]);
+  const dispatch = useDispatch<AppDispatch>();
+  const { compareList, comparedProducts, allProducts, loading, total } =
+    useSelector((state: RootState) => state.product);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [modalPage, setModalPage] = useState(1);
 
   useEffect(() => {
-    const compareList = location.state?.compareList || [];
-    fetchProducts(compareList);
-    fetchAllProducts();
-  }, [location]);
+    fetchComparedProducts();
+  }, [compareList]);
 
-  const fetchProducts = async (ids: number[]) => {
-    try {
-      const fetchedProducts = await Promise.all(
-        ids.map((id) => axios.get(`https://dummyjson.com/products/${id}`))
-      );
-      setProducts(fetchedProducts.map((response) => response.data));
-    } catch (error) {
-      console.error("Error fetching products:", error);
-    }
-  };
-
-  const fetchAllProducts = async () => {
-    try {
-      const response = await axios.get("https://dummyjson.com/products");
-      setAllProducts(response.data.products);
-    } catch (error) {
-      console.error("Error fetching all products:", error);
+  const fetchComparedProducts = async () => {
+    for (const id of compareList) {
+      if (!comparedProducts.some((product) => product.id === id)) {
+        dispatch(fetchProductById(id));
+      }
     }
   };
 
   const handleRemove = (id: number) => {
-    setProducts(products.filter((product) => product.id !== id));
+    dispatch(removeFromCompare(id));
     notification.success({ message: "Product removed from comparison" });
   };
 
   const handleAddMore = () => {
     setIsModalVisible(true);
+    setModalPage(1);
+    dispatch(fetchProducts({ limit: 10, skip: 0 }));
   };
 
   const handleModalOk = () => {
@@ -62,9 +58,9 @@ const CompareProducts: React.FC = () => {
     setIsModalVisible(false);
   };
 
-  const handleAddProduct = (product: Product) => {
-    if (products.length < 4 && !products.some((p) => p.id === product.id)) {
-      setProducts([...products, product]);
+  const handleAddProduct = (productId: number) => {
+    if (compareList.length < 4 && !compareList.includes(productId)) {
+      dispatch(addToCompare(productId));
       notification.success({ message: "Product added to comparison" });
     } else {
       notification.warning({
@@ -84,16 +80,27 @@ const CompareProducts: React.FC = () => {
       width: 100,
       render: (text: string, record: Product) => (
         <Button
-          onClick={() => handleAddProduct(record)}
-          disabled={
-            products.some((p) => p.id === record.id) || products.length >= 4
-          }
+          onClick={() => handleAddProduct(record.id)}
+          disabled={compareList.includes(record.id) || compareList.length >= 4}
         >
           Add to Compare
         </Button>
       ),
     },
   ];
+
+  const handleTableScroll = (event: React.UIEvent<HTMLElement>) => {
+    const { target } = event;
+    if (target) {
+      const { scrollTop, clientHeight, scrollHeight } = target as HTMLElement;
+      if (scrollHeight - scrollTop === clientHeight) {
+        if (allProducts.length < total) {
+          setModalPage((prev) => prev + 1);
+          dispatch(fetchProducts({ limit: 10, skip: modalPage * 10 }));
+        }
+      }
+    }
+  };
 
   return (
     <div>
@@ -108,23 +115,31 @@ const CompareProducts: React.FC = () => {
           overflowX: "auto",
         }}
       >
-        {products.map((product) => (
+        {comparedProducts.map((product: any) => (
           <Card
             key={product.id}
             title={product.title}
             style={{ width: 300, marginRight: 20, flexShrink: 0 }}
           >
-            <p>Brand: {product.brand}</p>
-            <p>Category: {product.category}</p>
-            <p>Price: ${product.price}</p>
-            <p>Description: {product.description}</p>
+            <p>
+              <strong>Brand:</strong> {product.brand}
+            </p>
+            <p>
+              <strong>Category:</strong> {product.category}
+            </p>
+            <p>
+              <strong>Price:</strong> ${product.price}
+            </p>
+            <p>
+              <strong>Description:</strong> {product.description}
+            </p>
             <Button onClick={() => handleRemove(product.id)}>Remove</Button>
           </Card>
         ))}
       </div>
       <Button
         onClick={handleAddMore}
-        disabled={products.length >= 4}
+        disabled={compareList.length >= 4}
         style={{ marginTop: "20px" }}
       >
         Add More
@@ -142,6 +157,8 @@ const CompareProducts: React.FC = () => {
           dataSource={allProducts}
           scroll={{ y: 500 }}
           pagination={false}
+          loading={loading}
+          onScroll={handleTableScroll}
         />
       </Modal>
     </div>
